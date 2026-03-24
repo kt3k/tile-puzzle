@@ -14,6 +14,10 @@ interface Vec2 {
 interface StageData {
   name: string;
   map: string[];
+  player: Vec2;
+  targets: { pos: Vec2; state: number }[];
+  operations: { pos: Vec2; transform: number }[];
+  goals: { pos: Vec2; requiredState: number }[];
 }
 
 interface Stage {
@@ -71,58 +75,373 @@ const GROUP_ORDER = 3;
 const ANIM_FRAMES = 16;
 const STATE_COLORS = ["#e74c3c", "#2ecc71", "#3498db"];
 const STATE_LABELS = ["R", "G", "B"];
-const WALL_COLOR = "#2c2c54";
-const FLOOR_COLOR = "#2a2a3e";
-const GRID_COLOR = "#333350";
+const WALL_COLOR = "#5b6078";
+const WALL_TOP_COLOR = "#6e7491";
+const WALL_SHADOW_COLOR = "#3d4059";
+const FLOOR_COLOR = "#e8e0d4";
+const FLOOR_ALT_COLOR = "#ded6ca";
+const GRID_COLOR = "#d0c8bc";
 const PLAYER_COLOR = "#f5f5f5";
 const OP_COLOR = "#9b59b6";
 
 // === Stage definitions ===
 const STAGES: StageData[] = [
   {
-    name: "Stage 1: Discovery",
+    name: "Stage 1: First Step",
     map: [
       "##############",
-      "#P...........#",
       "#............#",
       "#............#",
-      "#....O0......#",
       "#............#",
-      "#.T0.....G2..#",
+      "#............#",
+      "#..#.........#",
+      "#............#",
       "#............#",
       "##############",
     ],
+    player: { x: 1, y: 1 },
+    targets: [{ pos: { x: 2, y: 6 }, state: 0 }],
+    operations: [{ pos: { x: 5, y: 4 }, transform: 0 }],
+    goals: [{ pos: { x: 9, y: 6 }, requiredState: 1 }],
   },
   {
-    name: "Stage 2: Two Targets",
+    name: "Stage 2: Two Steps",
+    map: [
+      "##############",
+      "#............#",
+      "#............#",
+      "#......#.....#",
+      "#............#",
+      "#............#",
+      "#...#........#",
+      "#............#",
+      "##############",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [{ pos: { x: 2, y: 6 }, state: 0 }],
+    operations: [
+      { pos: { x: 5, y: 3 }, transform: 0 },
+      { pos: { x: 9, y: 5 }, transform: 0 },
+    ],
+    goals: [{ pos: { x: 11, y: 6 }, requiredState: 2 }],
+  },
+  {
+    name: "Stage 3: Reverse",
+    map: [
+      "##############",
+      "#............#",
+      "#.....#......#",
+      "#............#",
+      "#............#",
+      "#........#...#",
+      "#............#",
+      "#............#",
+      "##############",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [{ pos: { x: 2, y: 6 }, state: 1 }],
+    operations: [
+      { pos: { x: 5, y: 3 }, transform: 0 },
+      { pos: { x: 10, y: 3 }, transform: 1 },
+    ],
+    goals: [{ pos: { x: 11, y: 6 }, requiredState: 0 }],
+  },
+  {
+    name: "Stage 4: Two Targets",
     map: [
       "################",
-      "#P.............#",
       "#..............#",
-      "#....O0....O1..#",
       "#..............#",
-      "#.T0......T1...#",
+      "#.....#........#",
       "#..............#",
-      "#....G2....G0..#",
+      "#..............#",
+      "#..........#...#",
+      "#..............#",
       "#..............#",
       "################",
     ],
+    player: { x: 1, y: 1 },
+    targets: [
+      { pos: { x: 2, y: 5 }, state: 0 },
+      { pos: { x: 10, y: 5 }, state: 1 },
+    ],
+    operations: [
+      { pos: { x: 5, y: 3 }, transform: 0 },
+      { pos: { x: 11, y: 3 }, transform: 1 },
+    ],
+    goals: [
+      { pos: { x: 5, y: 7 }, requiredState: 2 },
+      { pos: { x: 11, y: 7 }, requiredState: 0 },
+    ],
   },
   {
-    name: "Stage 3: Shared Path",
+    name: "Stage 5: Detour",
     map: [
       "################",
-      "#P.............#",
       "#..............#",
-      "#...O0...O0....#",
       "#..............#",
-      "#..O1..........#",
+      "#....####......#",
       "#..............#",
-      "#.T0...T2......#",
       "#..............#",
-      "#....G1....G0..#",
+      "#......####....#",
+      "#..............#",
       "#..............#",
       "################",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [{ pos: { x: 2, y: 7 }, state: 0 }],
+    operations: [
+      { pos: { x: 3, y: 3 }, transform: 0 },
+      { pos: { x: 11, y: 5 }, transform: 0 },
+      { pos: { x: 13, y: 3 }, transform: 1 },
+    ],
+    goals: [{ pos: { x: 13, y: 7 }, requiredState: 2 }],
+  },
+  {
+    name: "Stage 6: Split",
+    map: [
+      "################",
+      "#..............#",
+      "#..............#",
+      "#..#...........#",
+      "#..#...........#",
+      "#..#...........#",
+      "#..............#",
+      "#..........#...#",
+      "#..............#",
+      "#..............#",
+      "################",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [
+      { pos: { x: 1, y: 5 }, state: 0 },
+      { pos: { x: 1, y: 7 }, state: 2 },
+    ],
+    operations: [
+      { pos: { x: 6, y: 3 }, transform: 0 },
+      { pos: { x: 6, y: 7 }, transform: 1 },
+    ],
+    goals: [
+      { pos: { x: 13, y: 3 }, requiredState: 1 },
+      { pos: { x: 13, y: 7 }, requiredState: 1 },
+    ],
+  },
+  {
+    name: "Stage 7: Maze",
+    map: [
+      "################",
+      "#..#...........#",
+      "#..#.#.........#",
+      "#....#...#.....#",
+      "#........#.....#",
+      "###..#...#.....#",
+      "#....#.........#",
+      "#..............#",
+      "#..............#",
+      "################",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [{ pos: { x: 1, y: 7 }, state: 0 }],
+    operations: [
+      { pos: { x: 3, y: 4 }, transform: 0 },
+      { pos: { x: 7, y: 2 }, transform: 0 },
+      { pos: { x: 7, y: 6 }, transform: 1 },
+    ],
+    goals: [{ pos: { x: 13, y: 1 }, requiredState: 1 }],
+  },
+  {
+    name: "Stage 8: Three Targets",
+    map: [
+      "##################",
+      "#................#",
+      "#..#.............#",
+      "#..#......#......#",
+      "#................#",
+      "#........#.......#",
+      "#................#",
+      "#....#...........#",
+      "#................#",
+      "#................#",
+      "##################",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [
+      { pos: { x: 1, y: 4 }, state: 0 },
+      { pos: { x: 1, y: 6 }, state: 1 },
+      { pos: { x: 1, y: 8 }, state: 2 },
+    ],
+    operations: [
+      { pos: { x: 6, y: 2 }, transform: 0 },
+      { pos: { x: 12, y: 2 }, transform: 1 },
+      { pos: { x: 6, y: 6 }, transform: 0 },
+    ],
+    goals: [
+      { pos: { x: 15, y: 4 }, requiredState: 2 },
+      { pos: { x: 15, y: 6 }, requiredState: 0 },
+      { pos: { x: 15, y: 8 }, requiredState: 1 },
+    ],
+  },
+  {
+    name: "Stage 9: Narrow Corridors",
+    map: [
+      "################",
+      "#..............#",
+      "####.####.####.#",
+      "#..............#",
+      "#.####.####.####",
+      "#..............#",
+      "####.####.####.#",
+      "#..............#",
+      "#..............#",
+      "################",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [
+      { pos: { x: 1, y: 3 }, state: 0 },
+      { pos: { x: 1, y: 5 }, state: 1 },
+    ],
+    operations: [
+      { pos: { x: 5, y: 1 }, transform: 0 },
+      { pos: { x: 10, y: 3 }, transform: 0 },
+      { pos: { x: 5, y: 5 }, transform: 1 },
+      { pos: { x: 10, y: 7 }, transform: 1 },
+    ],
+    goals: [
+      { pos: { x: 13, y: 7 }, requiredState: 2 },
+      { pos: { x: 14, y: 7 }, requiredState: 2 },
+    ],
+  },
+  {
+    name: "Stage 10: Switchback",
+    map: [
+      "##################",
+      "#................#",
+      "#.######.........#",
+      "#................#",
+      "#........######..#",
+      "#................#",
+      "#.######.........#",
+      "#................#",
+      "#................#",
+      "##################",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [
+      { pos: { x: 1, y: 7 }, state: 0 },
+      { pos: { x: 3, y: 7 }, state: 0 },
+    ],
+    operations: [
+      { pos: { x: 1, y: 3 }, transform: 0 },
+      { pos: { x: 15, y: 3 }, transform: 0 },
+      { pos: { x: 1, y: 5 }, transform: 1 },
+      { pos: { x: 15, y: 5 }, transform: 0 },
+    ],
+    goals: [
+      { pos: { x: 15, y: 7 }, requiredState: 1 },
+      { pos: { x: 16, y: 7 }, requiredState: 2 },
+    ],
+  },
+  {
+    name: "Stage 11: Bottleneck",
+    map: [
+      "##################",
+      "#.......#........#",
+      "#.......#........#",
+      "#.......#........#",
+      "#.......#........#",
+      "#................#",
+      "#.......#........#",
+      "#.......#........#",
+      "#.......#........#",
+      "##################",
+    ],
+    player: { x: 4, y: 5 },
+    targets: [
+      { pos: { x: 2, y: 2 }, state: 0 },
+      { pos: { x: 2, y: 7 }, state: 1 },
+      { pos: { x: 5, y: 2 }, state: 2 },
+    ],
+    operations: [
+      { pos: { x: 3, y: 5 }, transform: 0 },
+      { pos: { x: 6, y: 5 }, transform: 1 },
+      { pos: { x: 12, y: 3 }, transform: 0 },
+      { pos: { x: 12, y: 7 }, transform: 1 },
+    ],
+    goals: [
+      { pos: { x: 15, y: 2 }, requiredState: 1 },
+      { pos: { x: 15, y: 5 }, requiredState: 0 },
+      { pos: { x: 15, y: 7 }, requiredState: 2 },
+    ],
+  },
+  {
+    name: "Stage 12: Gauntlet",
+    map: [
+      "####################",
+      "#..................#",
+      "#.##..#..#..##.....#",
+      "#..................#",
+      "#...##..#..##......#",
+      "#..................#",
+      "#.##..#..#..##.....#",
+      "#..................#",
+      "#..................#",
+      "####################",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [
+      { pos: { x: 1, y: 3 }, state: 0 },
+      { pos: { x: 1, y: 5 }, state: 1 },
+      { pos: { x: 1, y: 7 }, state: 2 },
+    ],
+    operations: [
+      { pos: { x: 4, y: 1 }, transform: 0 },
+      { pos: { x: 8, y: 3 }, transform: 1 },
+      { pos: { x: 4, y: 5 }, transform: 0 },
+      { pos: { x: 8, y: 7 }, transform: 1 },
+      { pos: { x: 14, y: 4 }, transform: 0 },
+    ],
+    goals: [
+      { pos: { x: 17, y: 3 }, requiredState: 2 },
+      { pos: { x: 17, y: 5 }, requiredState: 2 },
+      { pos: { x: 17, y: 7 }, requiredState: 0 },
+    ],
+  },
+  {
+    name: "Stage 13: Final Challenge",
+    map: [
+      "####################",
+      "#..................#",
+      "#.##.......##......#",
+      "#..........#.......#",
+      "#.###..............#",
+      "#..................#",
+      "#..........###.....#",
+      "#..................#",
+      "#...##.......##....#",
+      "#..................#",
+      "#..................#",
+      "####################",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [
+      { pos: { x: 1, y: 5 }, state: 0 },
+      { pos: { x: 1, y: 7 }, state: 1 },
+      { pos: { x: 1, y: 9 }, state: 2 },
+      { pos: { x: 3, y: 9 }, state: 0 },
+    ],
+    operations: [
+      { pos: { x: 5, y: 2 }, transform: 0 },
+      { pos: { x: 5, y: 8 }, transform: 1 },
+      { pos: { x: 10, y: 4 }, transform: 0 },
+      { pos: { x: 10, y: 8 }, transform: 1 },
+      { pos: { x: 15, y: 2 }, transform: 0 },
+      { pos: { x: 15, y: 6 }, transform: 1 },
+    ],
+    goals: [
+      { pos: { x: 17, y: 4 }, requiredState: 1 },
+      { pos: { x: 17, y: 6 }, requiredState: 2 },
+      { pos: { x: 17, y: 8 }, requiredState: 0 },
+      { pos: { x: 17, y: 10 }, requiredState: 1 },
     ],
   },
 ];
@@ -130,10 +449,6 @@ const STAGES: StageData[] = [
 // === Parse stage ===
 function parseStage(stageData: StageData): Stage {
   const walls = new Set<string>();
-  const targets: ParsedTarget[] = [];
-  const operations: Operation[] = [];
-  const goals: Goal[] = [];
-  let playerStart: Vec2 = { x: 0, y: 0 };
   const map = stageData.map;
   const height = map.length;
   const width = Math.max(...map.map((r) => r.length));
@@ -141,32 +456,32 @@ function parseStage(stageData: StageData): Stage {
   for (let y = 0; y < map.length; y++) {
     const row = map[y];
     for (let x = 0; x < row.length; x++) {
-      const ch = row[x];
-      if (ch === "#") {
+      if (row[x] === "#") {
         walls.add(`${x},${y}`);
-      } else if (ch === "P") {
-        playerStart = { x, y };
-      } else if (ch === "T") {
-        const state = parseInt(row[x + 1]);
-        targets.push({
-          id: targets.length,
-          x,
-          y,
-          state,
-          initialState: state,
-        });
-        x++;
-      } else if (ch === "O") {
-        const transform = parseInt(row[x + 1]);
-        operations.push({ x, y, transform });
-        x++;
-      } else if (ch === "G") {
-        const requiredState = parseInt(row[x + 1]);
-        goals.push({ id: goals.length, x, y, requiredState });
-        x++;
       }
     }
   }
+
+  const targets: ParsedTarget[] = stageData.targets.map((t, i) => ({
+    id: i,
+    x: t.pos.x,
+    y: t.pos.y,
+    state: t.state,
+    initialState: t.state,
+  }));
+
+  const operations: Operation[] = stageData.operations.map((o) => ({
+    x: o.pos.x,
+    y: o.pos.y,
+    transform: o.transform,
+  }));
+
+  const goals: Goal[] = stageData.goals.map((g, i) => ({
+    id: i,
+    x: g.pos.x,
+    y: g.pos.y,
+    requiredState: g.requiredState,
+  }));
 
   return {
     width,
@@ -175,7 +490,7 @@ function parseStage(stageData: StageData): Stage {
     targets,
     operations,
     goals,
-    playerStart,
+    playerStart: stageData.player,
     name: stageData.name,
   };
 }
@@ -463,18 +778,31 @@ function entityScreenY(
 function render(t: number): void {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Floor and grid
+  // Floor and walls
   for (let y = 0; y < stage.height; y++) {
     for (let x = 0; x < stage.width; x++) {
+      const tx = x * TILE;
+      const ty = y * TILE;
       if (stage.walls.has(`${x},${y}`)) {
+        // Wall with 3D bevel
+        const bevel = 4;
         ctx.fillStyle = WALL_COLOR;
-        ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+        ctx.fillRect(tx, ty, TILE, TILE);
+        // Top highlight
+        ctx.fillStyle = WALL_TOP_COLOR;
+        ctx.fillRect(tx, ty, TILE, bevel);
+        ctx.fillRect(tx, ty, bevel, TILE);
+        // Bottom shadow
+        ctx.fillStyle = WALL_SHADOW_COLOR;
+        ctx.fillRect(tx, ty + TILE - bevel, TILE, bevel);
+        ctx.fillRect(tx + TILE - bevel, ty, bevel, TILE);
       } else {
-        ctx.fillStyle = FLOOR_COLOR;
-        ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+        // Checkerboard floor
+        ctx.fillStyle = (x + y) % 2 === 0 ? FLOOR_COLOR : FLOOR_ALT_COLOR;
+        ctx.fillRect(tx, ty, TILE, TILE);
         ctx.strokeStyle = GRID_COLOR;
         ctx.lineWidth = 0.5;
-        ctx.strokeRect(x * TILE, y * TILE, TILE, TILE);
+        ctx.strokeRect(tx, ty, TILE, TILE);
       }
     }
   }
@@ -485,7 +813,10 @@ function render(t: number): void {
     const cy = goal.y * TILE + TILE / 2;
     const r = TILE * 0.35;
 
-    ctx.fillStyle = FLOOR_COLOR;
+    const goalFloor = (goal.x + goal.y) % 2 === 0
+      ? FLOOR_COLOR
+      : FLOOR_ALT_COLOR;
+    ctx.fillStyle = goalFloor;
     ctx.fillRect(goal.x * TILE + 1, goal.y * TILE + 1, TILE - 2, TILE - 2);
 
     ctx.beginPath();
@@ -790,5 +1121,127 @@ nextStageButton.addEventListener("click", () => {
   if (won) loadStage(currentStageIndex + 1);
 });
 
+// === Debug Stage Select ===
+const debugMode = location.hash === "#debug";
+let stageSelectActive = false;
+
+const MINI_TILE = 8;
+const stageSelectEl = document.getElementById("stage-select")!;
+const gameContainerEl = document.getElementById("game-container")!;
+
+function renderMiniStage(
+  miniCtx: CanvasRenderingContext2D,
+  stageData: StageData,
+): void {
+  const parsed = parseStage(stageData);
+  const t = MINI_TILE;
+
+  for (let y = 0; y < parsed.height; y++) {
+    for (let x = 0; x < parsed.width; x++) {
+      const tx = x * t;
+      const ty = y * t;
+      if (parsed.walls.has(`${x},${y}`)) {
+        miniCtx.fillStyle = WALL_COLOR;
+        miniCtx.fillRect(tx, ty, t, t);
+      } else {
+        miniCtx.fillStyle = (x + y) % 2 === 0 ? FLOOR_COLOR : FLOOR_ALT_COLOR;
+        miniCtx.fillRect(tx, ty, t, t);
+      }
+    }
+  }
+
+  for (const op of parsed.operations) {
+    miniCtx.fillStyle = OP_COLOR;
+    miniCtx.fillRect(op.x * t + 1, op.y * t + 1, t - 2, t - 2);
+  }
+
+  for (const goal of parsed.goals) {
+    miniCtx.strokeStyle = STATE_COLORS[goal.requiredState];
+    miniCtx.lineWidth = 1.5;
+    miniCtx.beginPath();
+    miniCtx.arc(
+      goal.x * t + t / 2,
+      goal.y * t + t / 2,
+      t * 0.35,
+      0,
+      Math.PI * 2,
+    );
+    miniCtx.stroke();
+  }
+
+  for (const tgt of parsed.targets) {
+    miniCtx.fillStyle = STATE_COLORS[tgt.state];
+    miniCtx.beginPath();
+    miniCtx.arc(
+      tgt.x * t + t / 2,
+      tgt.y * t + t / 2,
+      t * 0.35,
+      0,
+      Math.PI * 2,
+    );
+    miniCtx.fill();
+  }
+
+  miniCtx.fillStyle = PLAYER_COLOR;
+  miniCtx.beginPath();
+  miniCtx.arc(
+    stageData.player.x * t + t / 2,
+    stageData.player.y * t + t / 2,
+    t * 0.35,
+    0,
+    Math.PI * 2,
+  );
+  miniCtx.fill();
+  miniCtx.strokeStyle = "#333";
+  miniCtx.lineWidth = 1;
+  miniCtx.stroke();
+}
+
+function showStageSelect(): void {
+  stageSelectActive = true;
+  gameContainerEl.style.display = "none";
+  stageSelectEl.style.display = "flex";
+
+  // Clear previous cards (keep title)
+  const title = document.getElementById("stage-select-title")!;
+  stageSelectEl.innerHTML = "";
+  stageSelectEl.appendChild(title);
+
+  for (let i = 0; i < STAGES.length; i++) {
+    const stageData = STAGES[i];
+    const parsed = parseStage(stageData);
+
+    const card = document.createElement("div");
+    card.className = "stage-card";
+
+    const label = document.createElement("div");
+    label.className = "stage-card-name";
+    label.textContent = stageData.name;
+    card.appendChild(label);
+
+    const miniCanvas = document.createElement("canvas");
+    miniCanvas.width = parsed.width * MINI_TILE;
+    miniCanvas.height = parsed.height * MINI_TILE;
+    miniCanvas.style.imageRendering = "pixelated";
+    card.appendChild(miniCanvas);
+
+    const miniCtx = miniCanvas.getContext("2d")!;
+    renderMiniStage(miniCtx, stageData);
+
+    card.addEventListener("click", () => {
+      stageSelectActive = false;
+      stageSelectEl.style.display = "none";
+      gameContainerEl.style.display = "flex";
+      loadStage(i);
+    });
+
+    stageSelectEl.appendChild(card);
+  }
+}
+
 // === Start ===
-loadStage(0);
+if (debugMode) {
+  showStageSelect();
+} else {
+  loadStage(0);
+}

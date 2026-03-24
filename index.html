@@ -11,7 +11,7 @@
         box-sizing: border-box;
       }
       body {
-        background: #1a1a2e;
+        background: #3a3a5c;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -51,19 +51,60 @@
       #next-stage:hover {
         background: #3dbdb5;
       }
+      #stage-select {
+        display: none;
+        flex-wrap: wrap;
+        gap: 16px;
+        justify-content: center;
+        max-width: 700px;
+        padding: 16px;
+      }
+      #stage-select-title {
+        width: 100%;
+        text-align: center;
+        font-size: 18px;
+        font-weight: bold;
+        margin-bottom: 4px;
+      }
+      .stage-card {
+        cursor: pointer;
+        text-align: center;
+      }
+      .stage-card canvas {
+        border: 2px solid #555;
+        display: block;
+      }
+      .stage-card:hover canvas {
+        border-color: #4ecdc4;
+      }
+      .stage-card-name {
+        font-size: 11px;
+        color: #ccc;
+        margin-bottom: 4px;
+      }
+      #game-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
     </style>
   </head>
   <body>
-    <canvas id="game"></canvas>
-    <div id="ui">
-      WASD / Arrow Keys: Move &nbsp; Space: Jump (release all)<br>
-      <div id="message"></div>
-      <button id="next-stage">Next Stage</button>
-      <div
-        id="next-stage-hint"
-        style="visibility: hidden; font-size: 11px; opacity: 0.5; margin-top: 4px"
-      >
-        or press Enter
+    <div id="stage-select">
+      <div id="stage-select-title">Stage Select</div>
+    </div>
+    <div id="game-container">
+      <canvas id="game"></canvas>
+      <div id="ui">
+        WASD / Arrow Keys: Move &nbsp; Space: Jump (release all)<br>
+        <div id="message"></div>
+        <button id="next-stage">Next Stage</button>
+        <div
+          id="next-stage-hint"
+          style="visibility: hidden; font-size: 11px; opacity: 0.5; margin-top: 4px"
+        >
+          or press Enter
+        </div>
       </div>
     </div>
     <script type="module" src="./main.ts"></script>
