@@ -368,10 +368,11 @@ function tickEffects(): void {
 }
 
 function hasActiveEffects(): boolean {
-  return stageClearAnim > 0 || targets.some((t) =>
-    t.pickupAnim > 0 || t.releaseAnim > 0 || t.transformAnim > 0 ||
-    t.goalCorrectAnim > 0 || t.goalWrongAnim > 0
-  );
+  return stageClearAnim > 0 ||
+    targets.some((t) =>
+      t.pickupAnim > 0 || t.releaseAnim > 0 || t.transformAnim > 0 ||
+      t.goalCorrectAnim > 0 || t.goalWrongAnim > 0
+    );
 }
 
 function animationLoop(): void {
