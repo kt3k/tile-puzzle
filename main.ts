@@ -1,6 +1,6 @@
 import {
-  type Direction,
   bufferDirection,
+  type Direction,
   getHeldDirection,
   setupInputHandler,
 } from "./user_inputs.ts";
@@ -44,6 +44,12 @@ interface TargetObject {
   state: number;
   following: boolean;
   delivered: boolean;
+  pickupAnim: number; // 0 = no effect, 1..PICKUP_ANIM_FRAMES = animating
+  releaseAnim: number; // 0 = no effect, 1..RELEASE_ANIM_FRAMES = animating
+  transformAnim: number; // 0 = no effect, 1..TRANSFORM_ANIM_FRAMES = animating
+  prevState: number; // state before transform, for color flash
+  goalCorrectAnim: number;
+  goalWrongAnim: number;
 }
 
 interface Operation {
@@ -187,11 +193,22 @@ let won = false;
 let animFrame = 0;
 let animating = false;
 let animType: "move" | "jump" = "move";
+let stageClearAnim = 0;
+const STAGE_CLEAR_ANIM_FRAMES = 60;
 const JUMP_HEIGHT = TILE * 0.6;
+const PICKUP_ANIM_FRAMES = 20;
+const RELEASE_ANIM_FRAMES = 16;
+const TRANSFORM_ANIM_FRAMES = 20;
+const GOAL_CORRECT_ANIM_FRAMES = 24;
+const GOAL_WRONG_ANIM_FRAMES = 20;
 
 // === Canvas setup ===
 const canvas = document.getElementById("game") as HTMLCanvasElement;
 const ctx = canvas.getContext("2d")!;
+const nextStageButton = document.getElementById(
+  "next-stage",
+) as HTMLButtonElement;
+const nextStageHint = document.getElementById("next-stage-hint")!;
 
 function resizeCanvas(): void {
   canvas.width = stage.width * TILE;
@@ -221,13 +238,22 @@ function loadStage(index: number): void {
     state: t.initialState,
     following: false,
     delivered: false,
+    pickupAnim: 0,
+    releaseAnim: 0,
+    transformAnim: 0,
+    prevState: t.initialState,
+    goalCorrectAnim: 0,
+    goalWrongAnim: 0,
   }));
   followerChain = [];
   pathHistory = [{ x: player.x, y: player.y }];
   won = false;
   animating = false;
   animFrame = 0;
+  stageClearAnim = 0;
   document.getElementById("message")!.textContent = stage.name;
+  nextStageButton.style.visibility = "hidden";
+  nextStageHint.style.visibility = "hidden";
   resizeCanvas();
   render(1);
 }
@@ -280,7 +306,9 @@ function movePlayer(direction: Direction): void {
   for (const t of followerChain) {
     for (const op of stage.operations) {
       if (t.x === op.x && t.y === op.y) {
+        t.prevState = t.state;
         t.state = (t.state + op.transform + 1) % GROUP_ORDER;
+        t.transformAnim = TRANSFORM_ANIM_FRAMES;
       }
     }
   }
@@ -289,6 +317,7 @@ function movePlayer(direction: Direction): void {
   for (const t of targets) {
     if (!t.following && !t.delivered && t.x === player.x && t.y === player.y) {
       t.following = true;
+      t.pickupAnim = PICKUP_ANIM_FRAMES;
       // Pad pathHistory so this follower (at end of chain) has enough entries
       const needed = followerChain.length + 2;
       while (pathHistory.length < needed) {
@@ -309,6 +338,7 @@ function handleJump(): void {
     t.following = false;
     t.prevX = t.x;
     t.prevY = t.y;
+    t.releaseAnim = RELEASE_ANIM_FRAMES;
   }
   followerChain = [];
   pathHistory = [{ x: player.x, y: player.y }];
@@ -326,9 +356,28 @@ function startAnimation(): void {
   requestAnimationFrame(animationLoop);
 }
 
+function tickEffects(): void {
+  for (const t of targets) {
+    if (t.pickupAnim > 0) t.pickupAnim--;
+    if (t.releaseAnim > 0) t.releaseAnim--;
+    if (t.transformAnim > 0) t.transformAnim--;
+    if (t.goalCorrectAnim > 0) t.goalCorrectAnim--;
+    if (t.goalWrongAnim > 0) t.goalWrongAnim--;
+  }
+  if (stageClearAnim > 0) stageClearAnim--;
+}
+
+function hasActiveEffects(): boolean {
+  return stageClearAnim > 0 || targets.some((t) =>
+    t.pickupAnim > 0 || t.releaseAnim > 0 || t.transformAnim > 0 ||
+    t.goalCorrectAnim > 0 || t.goalWrongAnim > 0
+  );
+}
+
 function animationLoop(): void {
   animFrame++;
   const t = animFrame / ANIM_FRAMES;
+  tickEffects();
   render(t);
 
   if (animFrame < ANIM_FRAMES) {
@@ -336,6 +385,9 @@ function animationLoop(): void {
   } else {
     animating = false;
     checkGoals();
+    if (hasActiveEffects()) {
+      requestAnimationFrame(effectLoop);
+    }
     // Continue moving if key is still held
     const dir = getHeldDirection();
     if (dir && !won) {
@@ -344,27 +396,44 @@ function animationLoop(): void {
   }
 }
 
+function effectLoop(): void {
+  tickEffects();
+  render(1);
+  if (hasActiveEffects()) {
+    requestAnimationFrame(effectLoop);
+  }
+}
+
 function checkGoals(): void {
   let allGoalsMet = true;
   for (const goal of stage.goals) {
     let met = false;
     for (const t of targets) {
-      if (
-        !t.following && t.x === goal.x && t.y === goal.y &&
-        t.state === goal.requiredState
-      ) {
-        t.delivered = true;
-        met = true;
-        break;
+      if (!t.following && t.x === goal.x && t.y === goal.y) {
+        if (t.state === goal.requiredState) {
+          if (!t.delivered) {
+            t.delivered = true;
+            t.goalCorrectAnim = GOAL_CORRECT_ANIM_FRAMES;
+          }
+          met = true;
+          break;
+        } else {
+          // Wrong state on goal
+          if (t.goalWrongAnim === 0) {
+            t.goalWrongAnim = GOAL_WRONG_ANIM_FRAMES;
+          }
+        }
       }
     }
     if (!met) allGoalsMet = false;
   }
 
-  if (allGoalsMet && stage.goals.length > 0) {
+  if (allGoalsMet && stage.goals.length > 0 && !won) {
     won = true;
-    document.getElementById("message")!.textContent =
-      "Stage Clear! Press Enter for next stage.";
+    stageClearAnim = STAGE_CLEAR_ANIM_FRAMES;
+    document.getElementById("message")!.textContent = "Stage Clear!";
+    nextStageButton.style.visibility = "visible";
+    nextStageHint.style.visibility = "visible";
   }
 }
 
@@ -489,7 +558,15 @@ function render(t: number): void {
     const shadowScale = 1 - Math.sin(t * Math.PI) * 0.4;
     const groundY = entityScreenY(player.prevY, player.y, 1);
     ctx.beginPath();
-    ctx.ellipse(px, groundY + TILE * 0.2, TILE * 0.25 * shadowScale, TILE * 0.08 * shadowScale, 0, 0, Math.PI * 2);
+    ctx.ellipse(
+      px,
+      groundY + TILE * 0.2,
+      TILE * 0.25 * shadowScale,
+      TILE * 0.08 * shadowScale,
+      0,
+      0,
+      Math.PI * 2,
+    );
     ctx.fillStyle = "rgba(0,0,0,0.3)";
     ctx.fill();
   }
@@ -513,6 +590,65 @@ function render(t: number): void {
   ctx.strokeStyle = "#333";
   ctx.lineWidth = 1.5;
   ctx.stroke();
+
+  // Stage clear overlay
+  if (stageClearAnim > 0) {
+    const progress = 1 - stageClearAnim / STAGE_CLEAR_ANIM_FRAMES;
+    const w = canvas.width;
+    const h = canvas.height;
+    const centerX = w / 2;
+    const centerY = h / 2;
+
+    // Background dim
+    let dimBase: number;
+    if (progress < 0.3) {
+      dimBase = progress / 0.3;
+    } else if (progress < 0.7) {
+      dimBase = 1;
+    } else {
+      dimBase = 1 - (progress - 0.7) / 0.3;
+    }
+    const dimAlpha = dimBase * 0.35;
+    ctx.fillStyle = `rgba(0, 0, 0, ${dimAlpha})`;
+    ctx.fillRect(0, 0, w, h);
+
+    // "Clear!" text floats up, holds, then fades out
+    let textAlpha: number;
+    let textY: number;
+    if (progress < 0.4) {
+      // Fade in + float up
+      const p = progress / 0.4;
+      const eased = 1 - (1 - p) * (1 - p);
+      textAlpha = eased;
+      textY = centerY + 20 * (1 - eased);
+    } else if (progress < 0.7) {
+      // Hold
+      textAlpha = 1;
+      textY = centerY;
+    } else {
+      // Fade out + float up
+      const p = (progress - 0.7) / 0.3;
+      const eased = p * p;
+      textAlpha = 1 - eased;
+      textY = centerY - 15 * eased;
+    }
+    const fontSize = Math.min(w, h) * 0.18;
+
+    ctx.globalAlpha = textAlpha;
+    ctx.font = `bold ${fontSize}px Courier New`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    // Gold shadow
+    ctx.fillStyle = "rgba(255, 170, 0, 0.6)";
+    ctx.fillText("Clear!", centerX + 2, textY + 2);
+
+    // Main text
+    ctx.fillStyle = "#ffd700";
+    ctx.fillText("Clear!", centerX, textY);
+
+    ctx.globalAlpha = 1.0;
+  }
 }
 
 function drawTarget(
@@ -525,9 +661,20 @@ function drawTarget(
   const cy = entityScreenY(target.prevY, target.y, t);
   const r = TILE * 0.3;
 
+  // Transform flash: blend from old color to new color
+  let fillColor = STATE_COLORS[target.state];
+  if (target.transformAnim > 0) {
+    const progress = 1 - target.transformAnim / TRANSFORM_ANIM_FRAMES;
+    if (progress < 0.3) {
+      // Flash white briefly
+      const flash = 1 - progress / 0.3;
+      fillColor = `rgba(255, 255, 255, ${0.5 * flash + 0.5})`;
+    }
+  }
+
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = STATE_COLORS[target.state];
+  ctx.fillStyle = fillColor;
   if (isDelivered) ctx.globalAlpha = 0.4;
   ctx.fill();
   ctx.globalAlpha = 1.0;
@@ -547,6 +694,80 @@ function drawTarget(
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(STATE_LABELS[target.state], cx, cy);
+
+  // Pickup pulse effect: white ring expanding outward
+  if (target.pickupAnim > 0) {
+    const progress = 1 - target.pickupAnim / PICKUP_ANIM_FRAMES;
+    const pulseR = r + TILE * 0.4 * progress;
+    const alpha = 0.8 * (1 - progress);
+    ctx.beginPath();
+    ctx.arc(cx, cy, pulseR, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.lineWidth = 2.5 * (1 - progress) + 0.5;
+    ctx.stroke();
+  }
+
+  // Transform effect: colored ring burst
+  if (target.transformAnim > 0) {
+    const progress = 1 - target.transformAnim / TRANSFORM_ANIM_FRAMES;
+    const burstR = r + TILE * 0.5 * progress;
+    const alpha = 0.7 * (1 - progress);
+    ctx.beginPath();
+    ctx.arc(cx, cy, burstR, 0, Math.PI * 2);
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = STATE_COLORS[target.state];
+    ctx.lineWidth = 3 * (1 - progress) + 0.5;
+    ctx.stroke();
+    ctx.globalAlpha = 1.0;
+  }
+
+  // Release effect: ring shrinking inward with color fade
+  if (target.releaseAnim > 0) {
+    const progress = 1 - target.releaseAnim / RELEASE_ANIM_FRAMES;
+    const pulseR = r + TILE * 0.3 * (1 - progress);
+    const alpha = 0.6 * (1 - progress);
+    ctx.beginPath();
+    ctx.arc(cx, cy, pulseR, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(150, 150, 150, ${alpha})`;
+    ctx.lineWidth = 2 * (1 - progress) + 0.5;
+    ctx.setLineDash([3, 3]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Goal correct effect: golden expanding rings
+  if (target.goalCorrectAnim > 0) {
+    const progress = 1 - target.goalCorrectAnim / GOAL_CORRECT_ANIM_FRAMES;
+    // Double ring
+    for (let i = 0; i < 2; i++) {
+      const delay = i * 0.2;
+      const p = Math.max(0, progress - delay) / (1 - delay);
+      if (p <= 0) continue;
+      const ringR = r + TILE * 0.6 * p;
+      const alpha = 0.8 * (1 - p);
+      ctx.beginPath();
+      ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255, 215, 0, ${alpha})`;
+      ctx.lineWidth = 3 * (1 - p) + 1;
+      ctx.stroke();
+    }
+  }
+
+  // Goal wrong effect: red X shake
+  if (target.goalWrongAnim > 0) {
+    const progress = 1 - target.goalWrongAnim / GOAL_WRONG_ANIM_FRAMES;
+    const alpha = 0.9 * (1 - progress);
+    const shake = Math.sin(progress * Math.PI * 6) * 3 * (1 - progress);
+    const xSize = TILE * 0.25;
+    ctx.strokeStyle = `rgba(255, 60, 60, ${alpha})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx - xSize + shake, cy - xSize);
+    ctx.lineTo(cx + xSize + shake, cy + xSize);
+    ctx.moveTo(cx + xSize + shake, cy - xSize);
+    ctx.lineTo(cx - xSize + shake, cy + xSize);
+    ctx.stroke();
+  }
 }
 
 // === Input ===
@@ -562,6 +783,10 @@ setupInputHandler((action) => {
       if (won) loadStage(currentStageIndex + 1);
       break;
   }
+});
+
+nextStageButton.addEventListener("click", () => {
+  if (won) loadStage(currentStageIndex + 1);
 });
 
 // === Start ===

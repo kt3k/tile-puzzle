@@ -36,13 +36,35 @@
         color: #4ecdc4;
         min-height: 24px;
       }
+      #next-stage {
+        visibility: hidden;
+        margin-top: 8px;
+        padding: 8px 24px;
+        background: #4ecdc4;
+        color: #1a1a2e;
+        border: none;
+        font-family: "Courier New", monospace;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+      }
+      #next-stage:hover {
+        background: #3dbdb5;
+      }
     </style>
   </head>
   <body>
     <canvas id="game"></canvas>
     <div id="ui">
       WASD / Arrow Keys: Move &nbsp; Space: Jump (release all)<br>
-      <span id="message"></span>
+      <div id="message"></div>
+      <button id="next-stage">Next Stage</button>
+      <div
+        id="next-stage-hint"
+        style="visibility: hidden; font-size: 11px; opacity: 0.5; margin-top: 4px"
+      >
+        or press Enter
+      </div>
     </div>
     <script type="module" src="./main.ts"></script>
   </body>
