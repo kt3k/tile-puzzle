@@ -1,3 +1,10 @@
+import {
+  type Direction,
+  bufferDirection,
+  getHeldDirection,
+  setupInputHandler,
+} from "./user_inputs.ts";
+
 // === Types ===
 interface Vec2 {
   x: number;
@@ -32,6 +39,8 @@ interface TargetObject {
   id: number;
   x: number;
   y: number;
+  prevX: number;
+  prevY: number;
   state: number;
   following: boolean;
   delivered: boolean;
@@ -53,6 +62,7 @@ interface Goal {
 // === Constants ===
 const TILE = 40;
 const GROUP_ORDER = 3;
+const ANIM_FRAMES = 16;
 const STATE_COLORS = ["#e74c3c", "#2ecc71", "#3498db"];
 const STATE_LABELS = ["R", "G", "B"];
 const WALL_COLOR = "#2c2c54";
@@ -166,12 +176,18 @@ function parseStage(stageData: StageData): Stage {
 
 // === Game State ===
 let stage: Stage;
-let player: Vec2;
+let player: { x: number; y: number; prevX: number; prevY: number };
 let targets: TargetObject[];
 let followerChain: TargetObject[] = [];
 let pathHistory: Vec2[] = [];
 let currentStageIndex = 0;
 let won = false;
+
+// === Animation State ===
+let animFrame = 0;
+let animating = false;
+let animType: "move" | "jump" = "move";
+const JUMP_HEIGHT = TILE * 0.6;
 
 // === Canvas setup ===
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -190,11 +206,18 @@ function loadStage(index: number): void {
   }
   currentStageIndex = index;
   stage = parseStage(STAGES[index]);
-  player = { x: stage.playerStart.x, y: stage.playerStart.y };
+  player = {
+    x: stage.playerStart.x,
+    y: stage.playerStart.y,
+    prevX: stage.playerStart.x,
+    prevY: stage.playerStart.y,
+  };
   targets = stage.targets.map((t) => ({
     id: t.id,
     x: t.x,
     y: t.y,
+    prevX: t.x,
+    prevY: t.y,
     state: t.initialState,
     following: false,
     delivered: false,
@@ -202,9 +225,11 @@ function loadStage(index: number): void {
   followerChain = [];
   pathHistory = [{ x: player.x, y: player.y }];
   won = false;
+  animating = false;
+  animFrame = 0;
   document.getElementById("message")!.textContent = stage.name;
   resizeCanvas();
-  render();
+  render(1);
 }
 
 // === Game Logic ===
@@ -213,12 +238,27 @@ function isWall(x: number, y: number): boolean {
     y >= stage.height;
 }
 
-function movePlayer(dx: number, dy: number): void {
+const DIRECTION_DELTA: Record<Direction, { dx: number; dy: number }> = {
+  up: { dx: 0, dy: -1 },
+  down: { dx: 0, dy: 1 },
+  left: { dx: -1, dy: 0 },
+  right: { dx: 1, dy: 0 },
+};
+
+function movePlayer(direction: Direction): void {
   if (won) return;
+  if (animating) {
+    bufferDirection(direction);
+    return;
+  }
+  const { dx, dy } = DIRECTION_DELTA[direction];
   const nx = player.x + dx;
   const ny = player.y + dy;
   if (isWall(nx, ny)) return;
 
+  // Save previous positions
+  player.prevX = player.x;
+  player.prevY = player.y;
   player.x = nx;
   player.y = ny;
   pathHistory.push({ x: nx, y: ny });
@@ -229,6 +269,8 @@ function movePlayer(dx: number, dy: number): void {
     const t = followerChain[i];
     const histIdx = L - 2 - i;
     if (histIdx >= 0) {
+      t.prevX = t.x;
+      t.prevY = t.y;
       t.x = pathHistory[histIdx].x;
       t.y = pathHistory[histIdx].y;
     }
@@ -247,24 +289,59 @@ function movePlayer(dx: number, dy: number): void {
   for (const t of targets) {
     if (!t.following && !t.delivered && t.x === player.x && t.y === player.y) {
       t.following = true;
+      // Pad pathHistory so this follower (at end of chain) has enough entries
+      const needed = followerChain.length + 2;
+      while (pathHistory.length < needed) {
+        pathHistory.unshift(pathHistory[0]);
+      }
       followerChain.push(t);
     }
   }
 
-  checkGoals();
-  render();
+  // Start animation
+  animType = "move";
+  startAnimation();
 }
 
 function handleJump(): void {
-  if (won) return;
+  if (won || animating) return;
   for (const t of followerChain) {
     t.following = false;
+    t.prevX = t.x;
+    t.prevY = t.y;
   }
   followerChain = [];
   pathHistory = [{ x: player.x, y: player.y }];
 
-  checkGoals();
-  render();
+  player.prevX = player.x;
+  player.prevY = player.y;
+
+  animType = "jump";
+  startAnimation();
+}
+
+function startAnimation(): void {
+  animating = true;
+  animFrame = 0;
+  requestAnimationFrame(animationLoop);
+}
+
+function animationLoop(): void {
+  animFrame++;
+  const t = animFrame / ANIM_FRAMES;
+  render(t);
+
+  if (animFrame < ANIM_FRAMES) {
+    requestAnimationFrame(animationLoop);
+  } else {
+    animating = false;
+    checkGoals();
+    // Continue moving if key is still held
+    const dir = getHeldDirection();
+    if (dir && !won) {
+      movePlayer(dir);
+    }
+  }
 }
 
 function checkGoals(): void {
@@ -291,8 +368,29 @@ function checkGoals(): void {
   }
 }
 
+// === Interpolation ===
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
+
+function entityScreenX(
+  prevX: number,
+  x: number,
+  t: number,
+): number {
+  return lerp(prevX * TILE + TILE / 2, x * TILE + TILE / 2, t);
+}
+
+function entityScreenY(
+  prevY: number,
+  y: number,
+  t: number,
+): number {
+  return lerp(prevY * TILE + TILE / 2, y * TILE + TILE / 2, t);
+}
+
 // === Rendering ===
-function render(): void {
+function render(t: number): void {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // Floor and grid
@@ -361,25 +459,41 @@ function render(): void {
   }
 
   // Free targets
-  for (const t of targets) {
-    if (t.following || t.delivered) continue;
-    drawTarget(t, false, false);
+  for (const target of targets) {
+    if (target.following || target.delivered) continue;
+    drawTarget(target, false, false, t);
   }
 
   // Following targets
   for (let i = followerChain.length - 1; i >= 0; i--) {
-    drawTarget(followerChain[i], true, false);
+    drawTarget(followerChain[i], true, false, t);
   }
 
   // Delivered targets
-  for (const t of targets) {
-    if (!t.delivered) continue;
-    drawTarget(t, false, true);
+  for (const target of targets) {
+    if (!target.delivered) continue;
+    drawTarget(target, false, true, t);
   }
 
   // Player
-  const px = player.x * TILE + TILE / 2;
-  const py = player.y * TILE + TILE / 2;
+  const px = entityScreenX(player.prevX, player.x, t);
+  let py = entityScreenY(player.prevY, player.y, t);
+
+  // Jump arc: sin curve for vertical offset
+  if (animType === "jump" && animating) {
+    py -= Math.sin(t * Math.PI) * JUMP_HEIGHT;
+  }
+
+  // Shadow during jump
+  if (animType === "jump" && animating) {
+    const shadowScale = 1 - Math.sin(t * Math.PI) * 0.4;
+    const groundY = entityScreenY(player.prevY, player.y, 1);
+    ctx.beginPath();
+    ctx.ellipse(px, groundY + TILE * 0.2, TILE * 0.25 * shadowScale, TILE * 0.08 * shadowScale, 0, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.fill();
+  }
+
   ctx.beginPath();
   ctx.arc(px, py, TILE * 0.3, 0, Math.PI * 2);
   ctx.fillStyle = PLAYER_COLOR;
@@ -402,17 +516,18 @@ function render(): void {
 }
 
 function drawTarget(
-  t: TargetObject,
+  target: TargetObject,
   isFollowing: boolean,
   isDelivered: boolean,
+  t: number,
 ): void {
-  const cx = t.x * TILE + TILE / 2;
-  const cy = t.y * TILE + TILE / 2;
+  const cx = entityScreenX(target.prevX, target.x, t);
+  const cy = entityScreenY(target.prevY, target.y, t);
   const r = TILE * 0.3;
 
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = STATE_COLORS[t.state];
+  ctx.fillStyle = STATE_COLORS[target.state];
   if (isDelivered) ctx.globalAlpha = 0.4;
   ctx.fill();
   ctx.globalAlpha = 1.0;
@@ -431,44 +546,20 @@ function drawTarget(
   ctx.font = `bold ${TILE * 0.3}px Courier New`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(STATE_LABELS[t.state], cx, cy);
+  ctx.fillText(STATE_LABELS[target.state], cx, cy);
 }
 
 // === Input ===
-document.addEventListener("keydown", (e: KeyboardEvent) => {
-  if (won && e.key === "Enter") {
-    loadStage(currentStageIndex + 1);
-    return;
-  }
-
-  switch (e.key) {
-    case "ArrowUp":
-    case "w":
-    case "W":
-      e.preventDefault();
-      movePlayer(0, -1);
+setupInputHandler((action) => {
+  switch (action.type) {
+    case "move":
+      movePlayer(action.direction);
       break;
-    case "ArrowDown":
-    case "s":
-    case "S":
-      e.preventDefault();
-      movePlayer(0, 1);
-      break;
-    case "ArrowLeft":
-    case "a":
-    case "A":
-      e.preventDefault();
-      movePlayer(-1, 0);
-      break;
-    case "ArrowRight":
-    case "d":
-    case "D":
-      e.preventDefault();
-      movePlayer(1, 0);
-      break;
-    case " ":
-      e.preventDefault();
+    case "jump":
       handleJump();
+      break;
+    case "next_stage":
+      if (won) loadStage(currentStageIndex + 1);
       break;
   }
 });
