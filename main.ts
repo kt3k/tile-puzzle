@@ -4,6 +4,7 @@ import {
   getHeldDirection,
   setupInputHandler,
 } from "./user_inputs.ts";
+import { applyOperation, type GroupType } from "./algebra.ts";
 
 // === Types ===
 interface Vec2 {
@@ -18,6 +19,7 @@ interface StageData {
   targets: { pos: Vec2; state: number }[];
   operations: { pos: Vec2; transform: number }[];
   goals: { pos: Vec2; requiredState: number }[];
+  group?: GroupType;
 }
 
 interface Stage {
@@ -29,6 +31,7 @@ interface Stage {
   operations: Operation[];
   goals: Goal[];
   playerStart: Vec2;
+  group: GroupType;
 }
 
 interface ParsedTarget {
@@ -83,6 +86,19 @@ const FLOOR_ALT_COLOR = "#ded6ca";
 const GRID_COLOR = "#d0c8bc";
 const PLAYER_COLOR = "#f5f5f5";
 const OP_COLOR = "#9b59b6";
+const SWAP_OP_COLOR = "#e67e22";
+
+// S3 visual mappings: states 0-5 = e, r, r², s, sr, sr²
+const S3_STATE_COLORS = [
+  "#e74c3c",
+  "#2ecc71",
+  "#3498db",
+  "#e74c3c",
+  "#2ecc71",
+  "#3498db",
+];
+const S3_STATE_LABELS = ["R", "G", "B", "R", "G", "B"];
+const S3_STATE_FLIPPED = [false, false, false, true, true, true];
 
 // === Stage definitions ===
 const STAGES: StageData[] = [
@@ -444,6 +460,163 @@ const STAGES: StageData[] = [
       { pos: { x: 17, y: 10 }, requiredState: 1 },
     ],
   },
+  // === Chapter 2: Symmetric Group S3 ===
+  {
+    name: "Stage 14: Mirror",
+    group: "S3",
+    map: [
+      "##########",
+      "#........#",
+      "#........#",
+      "#........#",
+      "#........#",
+      "#........#",
+      "##########",
+    ],
+    player: { x: 1, y: 3 },
+    targets: [{ pos: { x: 2, y: 3 }, state: 0 }],
+    operations: [{ pos: { x: 5, y: 3 }, transform: 1 }],
+    goals: [{ pos: { x: 8, y: 3 }, requiredState: 3 }],
+  },
+  {
+    name: "Stage 15: Order Matters",
+    group: "S3",
+    map: [
+      "############",
+      "#..........#",
+      "#..........#",
+      "#..........#",
+      "#..........#",
+      "#..........#",
+      "#..........#",
+      "############",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [{ pos: { x: 1, y: 4 }, state: 0 }],
+    operations: [
+      { pos: { x: 4, y: 2 }, transform: 0 },
+      { pos: { x: 7, y: 5 }, transform: 1 },
+    ],
+    goals: [{ pos: { x: 10, y: 4 }, requiredState: 4 }],
+  },
+  {
+    name: "Stage 16: Double Agent",
+    group: "S3",
+    map: [
+      "##############",
+      "#............#",
+      "#............#",
+      "#....##......#",
+      "#............#",
+      "#......##....#",
+      "#............#",
+      "#............#",
+      "##############",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [
+      { pos: { x: 1, y: 4 }, state: 0 },
+      { pos: { x: 1, y: 6 }, state: 3 },
+    ],
+    operations: [
+      { pos: { x: 4, y: 2 }, transform: 0 },
+      { pos: { x: 9, y: 2 }, transform: 0 },
+      { pos: { x: 9, y: 6 }, transform: 1 },
+    ],
+    goals: [
+      { pos: { x: 12, y: 4 }, requiredState: 2 },
+      { pos: { x: 12, y: 6 }, requiredState: 5 },
+    ],
+  },
+  {
+    name: "Stage 17: Crossroads",
+    group: "S3",
+    map: [
+      "################",
+      "#..............#",
+      "#..............#",
+      "#....####......#",
+      "#..............#",
+      "#......####....#",
+      "#..............#",
+      "#..............#",
+      "################",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [{ pos: { x: 1, y: 6 }, state: 0 }],
+    operations: [
+      { pos: { x: 3, y: 2 }, transform: 1 },
+      { pos: { x: 9, y: 2 }, transform: 0 },
+      { pos: { x: 3, y: 6 }, transform: 0 },
+      { pos: { x: 11, y: 6 }, transform: 1 },
+    ],
+    goals: [{ pos: { x: 14, y: 4 }, requiredState: 5 }],
+  },
+  {
+    name: "Stage 18: The Commutator",
+    group: "S3",
+    map: [
+      "################",
+      "#..............#",
+      "#..#.......#...#",
+      "#..............#",
+      "#..............#",
+      "#...#.......#..#",
+      "#..............#",
+      "#..............#",
+      "################",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [
+      { pos: { x: 1, y: 4 }, state: 0 },
+      { pos: { x: 1, y: 6 }, state: 1 },
+    ],
+    operations: [
+      { pos: { x: 5, y: 2 }, transform: 0 },
+      { pos: { x: 5, y: 6 }, transform: 1 },
+      { pos: { x: 10, y: 2 }, transform: 0 },
+      { pos: { x: 10, y: 6 }, transform: 1 },
+    ],
+    goals: [
+      { pos: { x: 14, y: 3 }, requiredState: 2 },
+      { pos: { x: 14, y: 6 }, requiredState: 5 },
+    ],
+  },
+  {
+    name: "Stage 19: Graduation",
+    group: "S3",
+    map: [
+      "##################",
+      "#................#",
+      "#..##............#",
+      "#................#",
+      "#........##......#",
+      "#................#",
+      "#..............#.#",
+      "#................#",
+      "#....##..........#",
+      "#................#",
+      "##################",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [
+      { pos: { x: 1, y: 5 }, state: 0 },
+      { pos: { x: 1, y: 7 }, state: 1 },
+      { pos: { x: 1, y: 9 }, state: 3 },
+    ],
+    operations: [
+      { pos: { x: 5, y: 2 }, transform: 0 },
+      { pos: { x: 5, y: 8 }, transform: 1 },
+      { pos: { x: 10, y: 4 }, transform: 0 },
+      { pos: { x: 10, y: 8 }, transform: 1 },
+      { pos: { x: 14, y: 2 }, transform: 0 },
+    ],
+    goals: [
+      { pos: { x: 16, y: 3 }, requiredState: 2 },
+      { pos: { x: 16, y: 6 }, requiredState: 4 },
+      { pos: { x: 16, y: 9 }, requiredState: 0 },
+    ],
+  },
 ];
 
 // === Parse stage ===
@@ -492,6 +665,7 @@ function parseStage(stageData: StageData): Stage {
     goals,
     playerStart: stageData.player,
     name: stageData.name,
+    group: stageData.group ?? "Z3",
   };
 }
 
@@ -622,7 +796,7 @@ function movePlayer(direction: Direction): void {
     for (const op of stage.operations) {
       if (t.x === op.x && t.y === op.y) {
         t.prevState = t.state;
-        t.state = (t.state + op.transform + 1) % GROUP_ORDER;
+        t.state = applyOperation(t.state, op.transform, stage.group);
         t.transformAnim = TRANSFORM_ANIM_FRAMES;
       }
     }
@@ -808,6 +982,8 @@ function render(t: number): void {
   }
 
   // Goals
+  const goalColors = stage.group === "S3" ? S3_STATE_COLORS : STATE_COLORS;
+  const goalLabels = stage.group === "S3" ? S3_STATE_LABELS : STATE_LABELS;
   for (const goal of stage.goals) {
     const cx = goal.x * TILE + TILE / 2;
     const cy = goal.y * TILE + TILE / 2;
@@ -820,18 +996,34 @@ function render(t: number): void {
     ctx.fillRect(goal.x * TILE + 1, goal.y * TILE + 1, TILE - 2, TILE - 2);
 
     ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.strokeStyle = STATE_COLORS[goal.requiredState];
+    if (stage.group === "S3") {
+      // Draw triangle outline for S3 goals
+      const flipped = S3_STATE_FLIPPED[goal.requiredState];
+      const s = r * 1.2;
+      if (flipped) {
+        ctx.moveTo(cx, cy + s);
+        ctx.lineTo(cx + s, cy - s * 0.6);
+        ctx.lineTo(cx - s, cy - s * 0.6);
+      } else {
+        ctx.moveTo(cx, cy - s);
+        ctx.lineTo(cx + s, cy + s * 0.6);
+        ctx.lineTo(cx - s, cy + s * 0.6);
+      }
+      ctx.closePath();
+    } else {
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    }
+    ctx.strokeStyle = goalColors[goal.requiredState];
     ctx.lineWidth = 3;
     ctx.setLineDash([4, 4]);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    ctx.fillStyle = STATE_COLORS[goal.requiredState];
+    ctx.fillStyle = goalColors[goal.requiredState];
     ctx.font = `bold ${TILE * 0.35}px Courier New`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(STATE_LABELS[goal.requiredState], cx, cy);
+    ctx.fillText(goalLabels[goal.requiredState], cx, cy);
   }
 
   // Operations
@@ -846,9 +1038,10 @@ function render(t: number): void {
     ctx.lineTo(cx, cy + s);
     ctx.lineTo(cx - s, cy);
     ctx.closePath();
-    ctx.fillStyle = OP_COLOR;
+    const isSwap = stage.group === "S3" && op.transform === 1;
+    ctx.fillStyle = isSwap ? SWAP_OP_COLOR : OP_COLOR;
     ctx.fill();
-    ctx.strokeStyle = "#7d3c98";
+    ctx.strokeStyle = isSwap ? "#b8651b" : "#7d3c98";
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -856,7 +1049,10 @@ function render(t: number): void {
     ctx.font = `bold ${TILE * 0.4}px Courier New`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("?", cx, cy);
+    const opLabel = stage.group === "S3"
+      ? (op.transform === 1 ? "S" : "R")
+      : "?";
+    ctx.fillText(opLabel, cx, cy);
   }
 
   // Free targets
@@ -993,8 +1189,12 @@ function drawTarget(
   const cy = entityScreenY(target.prevY, target.y, t);
   const r = TILE * 0.3;
 
+  const isS3 = stage.group === "S3";
+  const stateColors = isS3 ? S3_STATE_COLORS : STATE_COLORS;
+  const stateLabels = isS3 ? S3_STATE_LABELS : STATE_LABELS;
+
   // Transform flash: blend from old color to new color
-  let fillColor = STATE_COLORS[target.state];
+  let fillColor = stateColors[target.state];
   if (target.transformAnim > 0) {
     const progress = 1 - target.transformAnim / TRANSFORM_ANIM_FRAMES;
     if (progress < 0.3) {
@@ -1005,7 +1205,25 @@ function drawTarget(
   }
 
   ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  if (isS3) {
+    // Draw triangle: ▲ (up) or ▼ (down) based on flipped state
+    const flipped = S3_STATE_FLIPPED[target.state];
+    const s = r * 1.2;
+    if (flipped) {
+      // ▼ pointing down
+      ctx.moveTo(cx, cy + s);
+      ctx.lineTo(cx + s, cy - s * 0.6);
+      ctx.lineTo(cx - s, cy - s * 0.6);
+    } else {
+      // ▲ pointing up
+      ctx.moveTo(cx, cy - s);
+      ctx.lineTo(cx + s, cy + s * 0.6);
+      ctx.lineTo(cx - s, cy + s * 0.6);
+    }
+    ctx.closePath();
+  } else {
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  }
   ctx.fillStyle = fillColor;
   if (isDelivered) ctx.globalAlpha = 0.4;
   ctx.fill();
@@ -1025,7 +1243,7 @@ function drawTarget(
   ctx.font = `bold ${TILE * 0.3}px Courier New`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(STATE_LABELS[target.state], cx, cy);
+  ctx.fillText(stateLabels[target.state], cx, cy);
 
   // Pickup pulse effect: white ring expanding outward
   if (target.pickupAnim > 0) {
@@ -1150,13 +1368,18 @@ function renderMiniStage(
     }
   }
 
+  const miniColors = (stageData.group === "S3")
+    ? S3_STATE_COLORS
+    : STATE_COLORS;
+
   for (const op of parsed.operations) {
-    miniCtx.fillStyle = OP_COLOR;
+    const isSwap = stageData.group === "S3" && op.transform === 1;
+    miniCtx.fillStyle = isSwap ? SWAP_OP_COLOR : OP_COLOR;
     miniCtx.fillRect(op.x * t + 1, op.y * t + 1, t - 2, t - 2);
   }
 
   for (const goal of parsed.goals) {
-    miniCtx.strokeStyle = STATE_COLORS[goal.requiredState];
+    miniCtx.strokeStyle = miniColors[goal.requiredState];
     miniCtx.lineWidth = 1.5;
     miniCtx.beginPath();
     miniCtx.arc(
@@ -1170,7 +1393,7 @@ function renderMiniStage(
   }
 
   for (const tgt of parsed.targets) {
-    miniCtx.fillStyle = STATE_COLORS[tgt.state];
+    miniCtx.fillStyle = miniColors[tgt.state];
     miniCtx.beginPath();
     miniCtx.arc(
       tgt.x * t + t / 2,
@@ -1208,6 +1431,15 @@ function showStageSelect(): void {
   stageSelectEl.appendChild(title);
 
   for (let i = 0; i < STAGES.length; i++) {
+    // Insert chapter separator before the first S3 stage
+    if (i > 0 && STAGES[i].group === "S3" && STAGES[i - 1].group !== "S3") {
+      const sep = document.createElement("div");
+      sep.style.cssText =
+        "width:100%;text-align:center;color:#9b59b6;font:bold 16px Courier New;padding:12px 0 4px;";
+      sep.textContent = "Chapter 2: Symmetric";
+      stageSelectEl.appendChild(sep);
+    }
+
     const stageData = STAGES[i];
     const parsed = parseStage(stageData);
 
