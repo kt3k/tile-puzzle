@@ -817,7 +817,9 @@ function animationLoop(): void {
           tt.delivered && tt.x === goal.x && tt.y === goal.y
         );
         if (alreadyFilled) continue;
-        if (ft.x === goal.x && ft.y === goal.y && ft.state === goal.requiredState) {
+        if (
+          ft.x === goal.x && ft.y === goal.y && ft.state === goal.requiredState
+        ) {
           ft.following = false;
           ft.prevX = ft.x;
           ft.prevY = ft.y;
