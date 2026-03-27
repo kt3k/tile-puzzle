@@ -4,80 +4,20 @@ import {
   getHeldDirection,
   setupInputHandler,
 } from "./user_inputs.ts";
-import { applyOperation, type GroupType } from "./algebra.ts";
-
-// === Types ===
-interface Vec2 {
-  x: number;
-  y: number;
-}
-
-interface StageData {
-  name: string;
-  map: string[];
-  player: Vec2;
-  targets: { pos: Vec2; state: number }[];
-  operations: { pos: Vec2; transform: number }[];
-  goals: { pos: Vec2; requiredState: number }[];
-  group?: GroupType;
-}
-
-interface Stage {
-  name: string;
-  width: number;
-  height: number;
-  walls: Set<string>;
-  targets: ParsedTarget[];
-  operations: Operation[];
-  goals: Goal[];
-  playerStart: Vec2;
-  group: GroupType;
-}
-
-interface ParsedTarget {
-  id: number;
-  x: number;
-  y: number;
-  state: number;
-  initialState: number;
-}
-
-interface TargetObject {
-  id: number;
-  x: number;
-  y: number;
-  prevX: number;
-  prevY: number;
-  state: number;
-  following: boolean;
-  delivered: boolean;
-  pickupAnim: number; // 0 = no effect, 1..PICKUP_ANIM_FRAMES = animating
-  releaseAnim: number; // 0 = no effect, 1..RELEASE_ANIM_FRAMES = animating
-  transformAnim: number; // 0 = no effect, 1..TRANSFORM_ANIM_FRAMES = animating
-  prevState: number; // state before transform, for color flash
-  goalCorrectAnim: number;
-  goalWrongAnim: number;
-}
-
-interface Operation {
-  x: number;
-  y: number;
-  transform: number;
-}
-
-interface Goal {
-  id: number;
-  x: number;
-  y: number;
-  requiredState: number;
-}
+import {
+  GOAL_CORRECT_ANIM_FRAMES,
+  GOAL_WRONG_ANIM_FRAMES,
+  PICKUP_ANIM_FRAMES,
+  RELEASE_ANIM_FRAMES,
+  Stage,
+  type StageData,
+  TargetObject,
+  TRANSFORM_ANIM_FRAMES,
+} from "./models.ts";
 
 // === Constants ===
 const TILE = 40;
-const GROUP_ORDER = 3;
 const ANIM_FRAMES = 16;
-const STATE_COLORS = ["#e74c3c", "#2ecc71", "#3498db"];
-const STATE_LABELS = ["R", "G", "B"];
 const WALL_COLOR = "#5b6078";
 const WALL_TOP_COLOR = "#6e7491";
 const WALL_SHADOW_COLOR = "#3d4059";
@@ -85,20 +25,6 @@ const FLOOR_COLOR = "#e8e0d4";
 const FLOOR_ALT_COLOR = "#ded6ca";
 const GRID_COLOR = "#d0c8bc";
 const PLAYER_COLOR = "#f5f5f5";
-const OP_COLOR = "#9b59b6";
-const SWAP_OP_COLOR = "#e67e22";
-
-// S3 visual mappings: states 0-5 = e, r, r², s, sr, sr²
-const S3_STATE_COLORS = [
-  "#e74c3c",
-  "#2ecc71",
-  "#3498db",
-  "#e74c3c",
-  "#2ecc71",
-  "#3498db",
-];
-const S3_STATE_LABELS = ["R", "G", "B", "R", "G", "B"];
-const S3_STATE_FLIPPED = [false, false, false, true, true, true];
 
 // === Stage definitions ===
 const STAGES: StageData[] = [
@@ -619,62 +545,12 @@ const STAGES: StageData[] = [
   },
 ];
 
-// === Parse stage ===
-function parseStage(stageData: StageData): Stage {
-  const walls = new Set<string>();
-  const map = stageData.map;
-  const height = map.length;
-  const width = Math.max(...map.map((r) => r.length));
-
-  for (let y = 0; y < map.length; y++) {
-    const row = map[y];
-    for (let x = 0; x < row.length; x++) {
-      if (row[x] === "#") {
-        walls.add(`${x},${y}`);
-      }
-    }
-  }
-
-  const targets: ParsedTarget[] = stageData.targets.map((t, i) => ({
-    id: i,
-    x: t.pos.x,
-    y: t.pos.y,
-    state: t.state,
-    initialState: t.state,
-  }));
-
-  const operations: Operation[] = stageData.operations.map((o) => ({
-    x: o.pos.x,
-    y: o.pos.y,
-    transform: o.transform,
-  }));
-
-  const goals: Goal[] = stageData.goals.map((g, i) => ({
-    id: i,
-    x: g.pos.x,
-    y: g.pos.y,
-    requiredState: g.requiredState,
-  }));
-
-  return {
-    width,
-    height,
-    walls,
-    targets,
-    operations,
-    goals,
-    playerStart: stageData.player,
-    name: stageData.name,
-    group: stageData.group ?? "Z3",
-  };
-}
-
 // === Game State ===
 let stage: Stage;
 let player: { x: number; y: number; prevX: number; prevY: number };
 let targets: TargetObject[];
 let followerChain: TargetObject[] = [];
-let pathHistory: Vec2[] = [];
+let pathHistory: { x: number; y: number }[] = [];
 let currentStageIndex = 0;
 let won = false;
 
@@ -685,11 +561,6 @@ let animType: "move" | "jump" = "move";
 let stageClearAnim = 0;
 const STAGE_CLEAR_ANIM_FRAMES = 60;
 const JUMP_HEIGHT = TILE * 0.6;
-const PICKUP_ANIM_FRAMES = 20;
-const RELEASE_ANIM_FRAMES = 16;
-const TRANSFORM_ANIM_FRAMES = 20;
-const GOAL_CORRECT_ANIM_FRAMES = 24;
-const GOAL_WRONG_ANIM_FRAMES = 20;
 
 // === Canvas setup ===
 const canvas = document.getElementById("game") as HTMLCanvasElement;
@@ -711,29 +582,14 @@ function loadStage(index: number): void {
     return;
   }
   currentStageIndex = index;
-  stage = parseStage(STAGES[index]);
+  stage = Stage.fromData(STAGES[index]);
   player = {
     x: stage.playerStart.x,
     y: stage.playerStart.y,
     prevX: stage.playerStart.x,
     prevY: stage.playerStart.y,
   };
-  targets = stage.targets.map((t) => ({
-    id: t.id,
-    x: t.x,
-    y: t.y,
-    prevX: t.x,
-    prevY: t.y,
-    state: t.initialState,
-    following: false,
-    delivered: false,
-    pickupAnim: 0,
-    releaseAnim: 0,
-    transformAnim: 0,
-    prevState: t.initialState,
-    goalCorrectAnim: 0,
-    goalWrongAnim: 0,
-  }));
+  targets = stage.createTargets();
   followerChain = [];
   pathHistory = [{ x: player.x, y: player.y }];
   won = false;
@@ -748,10 +604,6 @@ function loadStage(index: number): void {
 }
 
 // === Game Logic ===
-function isWall(x: number, y: number): boolean {
-  return stage.walls.has(`${x},${y}`) || x < 0 || y < 0 || x >= stage.width ||
-    y >= stage.height;
-}
 
 const DIRECTION_DELTA: Record<Direction, { dx: number; dy: number }> = {
   up: { dx: 0, dy: -1 },
@@ -769,7 +621,7 @@ function movePlayer(direction: Direction): void {
   const { dx, dy } = DIRECTION_DELTA[direction];
   const nx = player.x + dx;
   const ny = player.y + dy;
-  if (isWall(nx, ny)) return;
+  if (stage.isWall(nx, ny)) return;
 
   // Save previous positions
   player.prevX = player.x;
@@ -784,10 +636,7 @@ function movePlayer(direction: Direction): void {
     const t = followerChain[i];
     const histIdx = L - 2 - i;
     if (histIdx >= 0) {
-      t.prevX = t.x;
-      t.prevY = t.y;
-      t.x = pathHistory[histIdx].x;
-      t.y = pathHistory[histIdx].y;
+      t.moveTo(pathHistory[histIdx].x, pathHistory[histIdx].y);
     }
   }
 
@@ -795,9 +644,7 @@ function movePlayer(direction: Direction): void {
   for (const t of followerChain) {
     for (const op of stage.operations) {
       if (t.x === op.x && t.y === op.y) {
-        t.prevState = t.state;
-        t.state = applyOperation(t.state, op.transform, stage.group);
-        t.transformAnim = TRANSFORM_ANIM_FRAMES;
+        t.applyTransform(op.transform, stage.group);
       }
     }
   }
@@ -805,8 +652,7 @@ function movePlayer(direction: Direction): void {
   // Check pickup: player overlaps a free, non-delivered target
   for (const t of targets) {
     if (!t.following && !t.delivered && t.x === player.x && t.y === player.y) {
-      t.following = true;
-      t.pickupAnim = PICKUP_ANIM_FRAMES;
+      t.pickup();
       // Pad pathHistory so this follower (at end of chain) has enough entries
       const needed = followerChain.length + 2;
       while (pathHistory.length < needed) {
@@ -824,10 +670,7 @@ function movePlayer(direction: Direction): void {
 function handleJump(): void {
   if (won || animating) return;
   for (const t of followerChain) {
-    t.following = false;
-    t.prevX = t.x;
-    t.prevY = t.y;
-    t.releaseAnim = RELEASE_ANIM_FRAMES;
+    t.release();
   }
   followerChain = [];
   pathHistory = [{ x: player.x, y: player.y }];
@@ -847,21 +690,13 @@ function startAnimation(): void {
 
 function tickEffects(): void {
   for (const t of targets) {
-    if (t.pickupAnim > 0) t.pickupAnim--;
-    if (t.releaseAnim > 0) t.releaseAnim--;
-    if (t.transformAnim > 0) t.transformAnim--;
-    if (t.goalCorrectAnim > 0) t.goalCorrectAnim--;
-    if (t.goalWrongAnim > 0) t.goalWrongAnim--;
+    t.tickEffects();
   }
   if (stageClearAnim > 0) stageClearAnim--;
 }
 
 function hasActiveEffects(): boolean {
-  return stageClearAnim > 0 ||
-    targets.some((t) =>
-      t.pickupAnim > 0 || t.releaseAnim > 0 || t.transformAnim > 0 ||
-      t.goalCorrectAnim > 0 || t.goalWrongAnim > 0
-    );
+  return stageClearAnim > 0 || targets.some((t) => t.hasActiveEffects());
 }
 
 function animationLoop(): void {
@@ -895,30 +730,9 @@ function effectLoop(): void {
 }
 
 function checkGoals(): void {
-  let allGoalsMet = true;
-  for (const goal of stage.goals) {
-    let met = false;
-    for (const t of targets) {
-      if (!t.following && t.x === goal.x && t.y === goal.y) {
-        if (t.state === goal.requiredState) {
-          if (!t.delivered) {
-            t.delivered = true;
-            t.goalCorrectAnim = GOAL_CORRECT_ANIM_FRAMES;
-          }
-          met = true;
-          break;
-        } else {
-          // Wrong state on goal
-          if (t.goalWrongAnim === 0) {
-            t.goalWrongAnim = GOAL_WRONG_ANIM_FRAMES;
-          }
-        }
-      }
-    }
-    if (!met) allGoalsMet = false;
-  }
+  const result = stage.checkGoals(targets);
 
-  if (allGoalsMet && stage.goals.length > 0 && !won) {
+  if (result.allMet && stage.goals.length > 0 && !won) {
     won = true;
     stageClearAnim = STAGE_CLEAR_ANIM_FRAMES;
     document.getElementById("message")!.textContent = "Stage Clear!";
@@ -982,8 +796,7 @@ function render(t: number): void {
   }
 
   // Goals
-  const goalColors = stage.group === "S3" ? S3_STATE_COLORS : STATE_COLORS;
-  const goalLabels = stage.group === "S3" ? S3_STATE_LABELS : STATE_LABELS;
+  const group = stage.group;
   for (const goal of stage.goals) {
     const cx = goal.x * TILE + TILE / 2;
     const cy = goal.y * TILE + TILE / 2;
@@ -996,9 +809,8 @@ function render(t: number): void {
     ctx.fillRect(goal.x * TILE + 1, goal.y * TILE + 1, TILE - 2, TILE - 2);
 
     ctx.beginPath();
-    if (stage.group === "S3") {
-      // Draw triangle outline for S3 goals
-      const flipped = S3_STATE_FLIPPED[goal.requiredState];
+    if (group.shape === "triangle") {
+      const flipped = group.isFlipped(goal.requiredState);
       const s = r * 1.2;
       if (flipped) {
         ctx.moveTo(cx, cy + s);
@@ -1013,17 +825,17 @@ function render(t: number): void {
     } else {
       ctx.arc(cx, cy, r, 0, Math.PI * 2);
     }
-    ctx.strokeStyle = goalColors[goal.requiredState];
+    ctx.strokeStyle = group.stateColors[goal.requiredState];
     ctx.lineWidth = 3;
     ctx.setLineDash([4, 4]);
     ctx.stroke();
     ctx.setLineDash([]);
 
-    ctx.fillStyle = goalColors[goal.requiredState];
+    ctx.fillStyle = group.stateColors[goal.requiredState];
     ctx.font = `bold ${TILE * 0.35}px Courier New`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(goalLabels[goal.requiredState], cx, cy);
+    ctx.fillText(group.stateLabels[goal.requiredState], cx, cy);
   }
 
   // Operations
@@ -1038,10 +850,9 @@ function render(t: number): void {
     ctx.lineTo(cx, cy + s);
     ctx.lineTo(cx - s, cy);
     ctx.closePath();
-    const isSwap = stage.group === "S3" && op.transform === 1;
-    ctx.fillStyle = isSwap ? SWAP_OP_COLOR : OP_COLOR;
+    ctx.fillStyle = group.operationColor(op.transform);
     ctx.fill();
-    ctx.strokeStyle = isSwap ? "#b8651b" : "#7d3c98";
+    ctx.strokeStyle = group.operationBorderColor(op.transform);
     ctx.lineWidth = 2;
     ctx.stroke();
 
@@ -1049,10 +860,7 @@ function render(t: number): void {
     ctx.font = `bold ${TILE * 0.4}px Courier New`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    const opLabel = stage.group === "S3"
-      ? (op.transform === 1 ? "S" : "R")
-      : "?";
-    ctx.fillText(opLabel, cx, cy);
+    ctx.fillText(group.operationLabel(op.transform), cx, cy);
   }
 
   // Free targets
@@ -1189,12 +997,10 @@ function drawTarget(
   const cy = entityScreenY(target.prevY, target.y, t);
   const r = TILE * 0.3;
 
-  const isS3 = stage.group === "S3";
-  const stateColors = isS3 ? S3_STATE_COLORS : STATE_COLORS;
-  const stateLabels = isS3 ? S3_STATE_LABELS : STATE_LABELS;
+  const group = stage.group;
 
   // Transform flash: blend from old color to new color
-  let fillColor = stateColors[target.state];
+  let fillColor = group.stateColors[target.state];
   if (target.transformAnim > 0) {
     const progress = 1 - target.transformAnim / TRANSFORM_ANIM_FRAMES;
     if (progress < 0.3) {
@@ -1205,17 +1011,14 @@ function drawTarget(
   }
 
   ctx.beginPath();
-  if (isS3) {
-    // Draw triangle: ▲ (up) or ▼ (down) based on flipped state
-    const flipped = S3_STATE_FLIPPED[target.state];
+  if (group.shape === "triangle") {
+    const flipped = group.isFlipped(target.state);
     const s = r * 1.2;
     if (flipped) {
-      // ▼ pointing down
       ctx.moveTo(cx, cy + s);
       ctx.lineTo(cx + s, cy - s * 0.6);
       ctx.lineTo(cx - s, cy - s * 0.6);
     } else {
-      // ▲ pointing up
       ctx.moveTo(cx, cy - s);
       ctx.lineTo(cx + s, cy + s * 0.6);
       ctx.lineTo(cx - s, cy + s * 0.6);
@@ -1243,7 +1046,7 @@ function drawTarget(
   ctx.font = `bold ${TILE * 0.3}px Courier New`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(stateLabels[target.state], cx, cy);
+  ctx.fillText(group.stateLabels[target.state], cx, cy);
 
   // Pickup pulse effect: white ring expanding outward
   if (target.pickupAnim > 0) {
@@ -1265,7 +1068,7 @@ function drawTarget(
     ctx.beginPath();
     ctx.arc(cx, cy, burstR, 0, Math.PI * 2);
     ctx.globalAlpha = alpha;
-    ctx.strokeStyle = STATE_COLORS[target.state];
+    ctx.strokeStyle = group.stateColors[target.state];
     ctx.lineWidth = 3 * (1 - progress) + 0.5;
     ctx.stroke();
     ctx.globalAlpha = 1.0;
@@ -1341,7 +1144,6 @@ nextStageButton.addEventListener("click", () => {
 
 // === Debug Stage Select ===
 const debugMode = location.hash === "#debug";
-let stageSelectActive = false;
 
 const MINI_TILE = 8;
 const stageSelectEl = document.getElementById("stage-select")!;
@@ -1351,7 +1153,8 @@ function renderMiniStage(
   miniCtx: CanvasRenderingContext2D,
   stageData: StageData,
 ): void {
-  const parsed = parseStage(stageData);
+  const parsed = Stage.fromData(stageData);
+  const group = parsed.group;
   const t = MINI_TILE;
 
   for (let y = 0; y < parsed.height; y++) {
@@ -1368,18 +1171,13 @@ function renderMiniStage(
     }
   }
 
-  const miniColors = (stageData.group === "S3")
-    ? S3_STATE_COLORS
-    : STATE_COLORS;
-
   for (const op of parsed.operations) {
-    const isSwap = stageData.group === "S3" && op.transform === 1;
-    miniCtx.fillStyle = isSwap ? SWAP_OP_COLOR : OP_COLOR;
+    miniCtx.fillStyle = group.operationColor(op.transform);
     miniCtx.fillRect(op.x * t + 1, op.y * t + 1, t - 2, t - 2);
   }
 
   for (const goal of parsed.goals) {
-    miniCtx.strokeStyle = miniColors[goal.requiredState];
+    miniCtx.strokeStyle = group.stateColors[goal.requiredState];
     miniCtx.lineWidth = 1.5;
     miniCtx.beginPath();
     miniCtx.arc(
@@ -1392,8 +1190,8 @@ function renderMiniStage(
     miniCtx.stroke();
   }
 
-  for (const tgt of parsed.targets) {
-    miniCtx.fillStyle = miniColors[tgt.state];
+  for (const tgt of parsed.parsedTargets) {
+    miniCtx.fillStyle = group.stateColors[tgt.state];
     miniCtx.beginPath();
     miniCtx.arc(
       tgt.x * t + t / 2,
@@ -1421,7 +1219,6 @@ function renderMiniStage(
 }
 
 function showStageSelect(): void {
-  stageSelectActive = true;
   gameContainerEl.style.display = "none";
   stageSelectEl.style.display = "flex";
 
@@ -1432,7 +1229,7 @@ function showStageSelect(): void {
 
   for (let i = 0; i < STAGES.length; i++) {
     // Insert chapter separator before the first S3 stage
-    if (i > 0 && STAGES[i].group === "S3" && STAGES[i - 1].group !== "S3") {
+    if (i > 0 && STAGES[i].group === "S3" && STAGES[i - 1]?.group !== "S3") {
       const sep = document.createElement("div");
       sep.style.cssText =
         "width:100%;text-align:center;color:#9b59b6;font:bold 16px Courier New;padding:12px 0 4px;";
@@ -1441,7 +1238,7 @@ function showStageSelect(): void {
     }
 
     const stageData = STAGES[i];
-    const parsed = parseStage(stageData);
+    const parsed = Stage.fromData(stageData);
 
     const card = document.createElement("div");
     card.className = "stage-card";
@@ -1461,7 +1258,6 @@ function showStageSelect(): void {
     renderMiniStage(miniCtx, stageData);
 
     card.addEventListener("click", () => {
-      stageSelectActive = false;
       stageSelectEl.style.display = "none";
       gameContainerEl.style.display = "flex";
       loadStage(i);
