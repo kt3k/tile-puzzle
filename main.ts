@@ -649,7 +649,7 @@ const ctx = canvas.getContext("2d")!;
 const nextStageButton = document.getElementById(
   "next-stage",
 ) as HTMLButtonElement;
-const nextStageHint = document.getElementById("next-stage-hint")!;
+const nextStageArea = document.getElementById("next-stage-area")!;
 
 function resizeCanvas(): void {
   canvas.width = stage.width * TILE;
@@ -679,8 +679,7 @@ function loadStage(index: number): void {
   animFrame = 0;
   stageClearAnim = 0;
   document.getElementById("message")!.textContent = stage.name;
-  nextStageButton.style.visibility = "hidden";
-  nextStageHint.style.visibility = "hidden";
+  nextStageArea.style.visibility = "hidden";
   resizeCanvas();
   render(1);
 }
@@ -859,9 +858,7 @@ function checkGoals(): void {
   if (result.allMet && stage.goals.length > 0 && !won) {
     won = true;
     stageClearAnim = STAGE_CLEAR_ANIM_FRAMES;
-    document.getElementById("message")!.textContent = "Stage Clear!";
-    nextStageButton.style.visibility = "visible";
-    nextStageHint.style.visibility = "visible";
+    nextStageArea.style.visibility = "visible";
   }
 }
 
@@ -1057,27 +1054,22 @@ function render(t: number): void {
   ctx.stroke();
 
   // Stage clear overlay
-  if (stageClearAnim > 0) {
-    const progress = 1 - stageClearAnim / STAGE_CLEAR_ANIM_FRAMES;
+  if (stageClearAnim > 0 || won) {
+    const progress = stageClearAnim > 0
+      ? 1 - stageClearAnim / STAGE_CLEAR_ANIM_FRAMES
+      : 1;
     const w = canvas.width;
     const h = canvas.height;
     const centerX = w / 2;
     const centerY = h / 2;
 
     // Background dim
-    let dimBase: number;
-    if (progress < 0.3) {
-      dimBase = progress / 0.3;
-    } else if (progress < 0.7) {
-      dimBase = 1;
-    } else {
-      dimBase = 1 - (progress - 0.7) / 0.3;
-    }
+    const dimBase = Math.min(progress / 0.3, 1);
     const dimAlpha = dimBase * 0.35;
     ctx.fillStyle = `rgba(0, 0, 0, ${dimAlpha})`;
     ctx.fillRect(0, 0, w, h);
 
-    // "Clear!" text floats up, holds, then fades out
+    // "Clear!" text floats up then holds
     let textAlpha: number;
     let textY: number;
     if (progress < 0.4) {
@@ -1086,16 +1078,10 @@ function render(t: number): void {
       const eased = 1 - (1 - p) * (1 - p);
       textAlpha = eased;
       textY = centerY + 20 * (1 - eased);
-    } else if (progress < 0.7) {
+    } else {
       // Hold
       textAlpha = 1;
       textY = centerY;
-    } else {
-      // Fade out + float up
-      const p = (progress - 0.7) / 0.3;
-      const eased = p * p;
-      textAlpha = 1 - eased;
-      textY = centerY - 15 * eased;
     }
     const fontSize = Math.min(w, h) * 0.18;
 
