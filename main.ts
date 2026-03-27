@@ -540,6 +540,89 @@ const STAGES: StageData[] = [
       { pos: { x: 16, y: 9 }, requiredState: 0 },
     ],
   },
+  {
+    name: "Stage 20: Serpentine",
+    map: [
+      "####################",
+      "#..................#",
+      "######.######.####.#",
+      "#..................#",
+      "#.#####.######.#####",
+      "#..................#",
+      "#####.######.#####.#",
+      "#..................#",
+      "####################",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [
+      { pos: { x: 3, y: 1 }, state: 0 },
+      { pos: { x: 7, y: 1 }, state: 1 },
+      { pos: { x: 11, y: 1 }, state: 2 },
+      { pos: { x: 15, y: 1 }, state: 0 },
+      { pos: { x: 10, y: 3 }, state: 1 },
+      { pos: { x: 5, y: 5 }, state: 2 },
+    ],
+    operations: [
+      { pos: { x: 17, y: 1 }, transform: 0 },
+      { pos: { x: 6, y: 2 }, transform: 1 },
+      { pos: { x: 2, y: 3 }, transform: 0 },
+      { pos: { x: 5, y: 6 }, transform: 1 },
+      { pos: { x: 17, y: 5 }, transform: 0 },
+    ],
+    goals: [
+      { pos: { x: 15, y: 7 }, requiredState: 2 },
+      { pos: { x: 13, y: 7 }, requiredState: 0 },
+      { pos: { x: 11, y: 7 }, requiredState: 1 },
+      { pos: { x: 9, y: 7 }, requiredState: 2 },
+      { pos: { x: 7, y: 7 }, requiredState: 0 },
+      { pos: { x: 5, y: 7 }, requiredState: 1 },
+    ],
+  },
+  {
+    name: "Stage 21: Catacombs",
+    group: "S3",
+    map: [
+      "####################",
+      "#..................#",
+      "########.######.##.#",
+      "#..................#",
+      "#.####.########.####",
+      "#..................#",
+      "######.######.####.#",
+      "#..................#",
+      "#.######.####.######",
+      "#..................#",
+      "######.########.##.#",
+      "#..................#",
+      "####################",
+    ],
+    player: { x: 1, y: 1 },
+    targets: [
+      { pos: { x: 5, y: 1 }, state: 0 },
+      { pos: { x: 12, y: 1 }, state: 3 },
+      { pos: { x: 10, y: 3 }, state: 1 },
+      { pos: { x: 8, y: 5 }, state: 0 },
+      { pos: { x: 14, y: 7 }, state: 4 },
+      { pos: { x: 6, y: 9 }, state: 2 },
+    ],
+    operations: [
+      { pos: { x: 16, y: 1 }, transform: 0 },
+      { pos: { x: 8, y: 2 }, transform: 1 },
+      { pos: { x: 3, y: 3 }, transform: 0 },
+      { pos: { x: 6, y: 6 }, transform: 1 },
+      { pos: { x: 16, y: 5 }, transform: 0 },
+      { pos: { x: 3, y: 7 }, transform: 1 },
+      { pos: { x: 16, y: 9 }, transform: 0 },
+    ],
+    goals: [
+      { pos: { x: 15, y: 11 }, requiredState: 1 },
+      { pos: { x: 13, y: 11 }, requiredState: 4 },
+      { pos: { x: 11, y: 11 }, requiredState: 3 },
+      { pos: { x: 9, y: 11 }, requiredState: 5 },
+      { pos: { x: 7, y: 11 }, requiredState: 0 },
+      { pos: { x: 5, y: 11 }, requiredState: 2 },
+    ],
+  },
 ];
 
 // === Game State ===
@@ -729,6 +812,11 @@ function animationLoop(): void {
     for (let i = followerChain.length - 1; i >= 0; i--) {
       const ft = followerChain[i];
       for (const goal of stage.goals) {
+        // Skip goals that already have a delivered target
+        const alreadyFilled = targets.some((tt) =>
+          tt.delivered && tt.x === goal.x && tt.y === goal.y
+        );
+        if (alreadyFilled) continue;
         if (ft.x === goal.x && ft.y === goal.y && ft.state === goal.requiredState) {
           ft.following = false;
           ft.prevX = ft.x;
