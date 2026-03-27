@@ -373,7 +373,6 @@ const STAGES: StageData[] = [
     ],
     operations: [
       { pos: { x: 5, y: 2 }, transform: 0 },
-      { pos: { x: 5, y: 8 }, transform: 1 },
       { pos: { x: 10, y: 4 }, transform: 0 },
       { pos: { x: 10, y: 8 }, transform: 1 },
       { pos: { x: 15, y: 2 }, transform: 0 },
@@ -532,8 +531,6 @@ const STAGES: StageData[] = [
     ],
     operations: [
       { pos: { x: 5, y: 2 }, transform: 0 },
-      { pos: { x: 5, y: 8 }, transform: 1 },
-      { pos: { x: 10, y: 4 }, transform: 0 },
       { pos: { x: 10, y: 8 }, transform: 1 },
       { pos: { x: 14, y: 2 }, transform: 0 },
     ],
@@ -843,13 +840,18 @@ function render(t: number): void {
     const cx = op.x * TILE + TILE / 2;
     const cy = op.y * TILE + TILE / 2;
     const s = TILE * 0.35;
+    const shape = group.operationShape(op.transform);
 
     ctx.beginPath();
-    ctx.moveTo(cx, cy - s);
-    ctx.lineTo(cx + s, cy);
-    ctx.lineTo(cx, cy + s);
-    ctx.lineTo(cx - s, cy);
-    ctx.closePath();
+    if (shape === "square") {
+      ctx.rect(cx - s, cy - s, s * 2, s * 2);
+    } else {
+      ctx.moveTo(cx, cy - s);
+      ctx.lineTo(cx + s, cy);
+      ctx.lineTo(cx, cy + s);
+      ctx.lineTo(cx - s, cy);
+      ctx.closePath();
+    }
     ctx.fillStyle = group.operationColor(op.transform);
     ctx.fill();
     ctx.strokeStyle = group.operationBorderColor(op.transform);

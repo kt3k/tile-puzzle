@@ -52,6 +52,7 @@ export interface Group {
   operationColor(transform: number): string;
   operationBorderColor(transform: number): string;
   operationLabel(transform: number): string;
+  operationShape(transform: number): "diamond" | "square";
 }
 
 const Z3_COLORS = ["#e74c3c", "#2ecc71", "#3498db"] as const;
@@ -73,16 +74,20 @@ export class Z3Group implements Group {
     return false;
   }
 
-  operationColor(_transform: number): string {
-    return "#9b59b6";
+  operationColor(transform: number): string {
+    return transform === 1 ? "#e67e22" : "#9b59b6";
   }
 
-  operationBorderColor(_transform: number): string {
-    return "#7d3c98";
+  operationBorderColor(transform: number): string {
+    return transform === 1 ? "#b8651b" : "#7d3c98";
   }
 
-  operationLabel(_transform: number): string {
-    return "?";
+  operationLabel(transform: number): string {
+    return transform === 1 ? "??" : "?";
+  }
+
+  operationShape(transform: number): "diamond" | "square" {
+    return transform === 1 ? "square" : "diamond";
   }
 }
 
@@ -129,6 +134,10 @@ export class S3Group implements Group {
 
   operationLabel(transform: number): string {
     return transform === 1 ? "S" : "R";
+  }
+
+  operationShape(transform: number): "diamond" | "square" {
+    return transform === 1 ? "square" : "diamond";
   }
 }
 
