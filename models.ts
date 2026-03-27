@@ -317,20 +317,9 @@ export class Stage {
   checkGoals(targets: TargetObject[]): GoalCheckResult {
     let allMet = true;
     for (const goal of this.goals) {
-      let met = false;
-      for (const t of targets) {
-        if (!t.following && t.x === goal.x && t.y === goal.y) {
-          if (t.state === goal.requiredState) {
-            if (!t.delivered) {
-              t.deliver();
-            }
-            met = true;
-            break;
-          } else {
-            t.markWrongGoal();
-          }
-        }
-      }
+      const met = targets.some((t) =>
+        t.delivered && t.x === goal.x && t.y === goal.y
+      );
       if (!met) allMet = false;
     }
     return { allMet };

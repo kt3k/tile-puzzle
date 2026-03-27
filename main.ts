@@ -547,6 +547,7 @@ let stage: Stage;
 let player: { x: number; y: number; prevX: number; prevY: number };
 let targets: TargetObject[];
 let followerChain: TargetObject[] = [];
+let followerGap: number[] = [];
 let pathHistory: { x: number; y: number }[] = [];
 let currentStageIndex = 0;
 let won = false;
@@ -588,6 +589,7 @@ function loadStage(index: number): void {
   };
   targets = stage.createTargets();
   followerChain = [];
+  followerGap = [];
   pathHistory = [{ x: player.x, y: player.y }];
   won = false;
   animating = false;
@@ -627,23 +629,38 @@ function movePlayer(direction: Direction): void {
   player.y = ny;
   pathHistory.push({ x: nx, y: ny });
 
-  // Update followers
+  // Update followers (with catch-up for gaps from auto-delivery)
   const L = pathHistory.length;
   for (let i = 0; i < followerChain.length; i++) {
     const t = followerChain[i];
-    const histIdx = L - 2 - i;
-    if (histIdx >= 0) {
-      t.moveTo(pathHistory[histIdx].x, pathHistory[histIdx].y);
-    }
-  }
+    const steps = 1 + (followerGap[i] || 0);
+    const targetHistIdx = L - 2 - i;
+    const startHistIdx = targetHistIdx - steps;
 
-  // Apply operations to followers
-  for (const t of followerChain) {
-    for (const op of stage.operations) {
-      if (t.x === op.x && t.y === op.y) {
-        t.applyTransform(op.transform, stage.group);
+    // Save original position for animation interpolation
+    const origX = t.x;
+    const origY = t.y;
+
+    // Walk through each step, applying operations at each position
+    for (let s = 1; s <= steps; s++) {
+      const histIdx = startHistIdx + s;
+      if (histIdx >= 0) {
+        t.x = pathHistory[histIdx].x;
+        t.y = pathHistory[histIdx].y;
+
+        // Apply operations at this position
+        for (const op of stage.operations) {
+          if (t.x === op.x && t.y === op.y) {
+            t.applyTransform(op.transform, stage.group);
+          }
+        }
       }
     }
+
+    // Set prev position to original for smooth animation
+    t.prevX = origX;
+    t.prevY = origY;
+    followerGap[i] = 0;
   }
 
   // Check pickup: player overlaps a free, non-delivered target
@@ -656,6 +673,7 @@ function movePlayer(direction: Direction): void {
         pathHistory.unshift(pathHistory[0]);
       }
       followerChain.push(t);
+      followerGap.push(0);
     }
   }
 
@@ -670,6 +688,7 @@ function handleJump(): void {
     t.release();
   }
   followerChain = [];
+  followerGap = [];
   pathHistory = [{ x: player.x, y: player.y }];
 
   player.prevX = player.x;
@@ -706,6 +725,24 @@ function animationLoop(): void {
     requestAnimationFrame(animationLoop);
   } else {
     animating = false;
+    // Auto-deliver followers on goal tiles (iterate in reverse for safe removal)
+    for (let i = followerChain.length - 1; i >= 0; i--) {
+      const ft = followerChain[i];
+      for (const goal of stage.goals) {
+        if (ft.x === goal.x && ft.y === goal.y && ft.state === goal.requiredState) {
+          ft.following = false;
+          ft.prevX = ft.x;
+          ft.prevY = ft.y;
+          ft.deliver();
+          followerChain.splice(i, 1);
+          followerGap.splice(i, 1);
+          for (let j = i; j < followerGap.length; j++) {
+            followerGap[j]++;
+          }
+          break;
+        }
+      }
+    }
     checkGoals();
     if (hasActiveEffects()) {
       requestAnimationFrame(effectLoop);
